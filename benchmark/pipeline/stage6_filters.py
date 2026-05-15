@@ -57,11 +57,14 @@ def _llm_answer(question: str, options: dict[str, str], context: str | None = No
             {"role": "system", "content": sys_prompt},
             {"role": "user", "content": "\n".join(parts)},
         ],
-        max_tokens=4,
+        max_tokens=64,  # GPT-5.5 reasoning overhead; <20 returns empty content
         temperature=0.0,
     )
-    raw = (raw or "").strip().upper()
-    return raw[0] if raw and raw[0] in "ABCD" else None
+    cand = (raw or "").upper()
+    for ch in cand:
+        if ch in "ABCD":
+            return ch
+    return None
 
 
 def _acc(panel_answers: list[str], correct: str) -> float:

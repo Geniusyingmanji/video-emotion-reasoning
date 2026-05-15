@@ -1,0 +1,17 @@
+{
+  "series": "synthetic_demo",
+  "episode": "ep01_demo",
+  "setting": "E3",
+  "model": "claude-sonnet-4-6",
+  "n_questions": 19,
+  "overall_accuracy": 0.47368421052631576,
+  "per_task_accuracy": {
+    "T1": 1.0,
+    "T2": 0.25,
+    "T4": 0.0,
+    "T6": 0.0,
+    "T7": 0.25,
+    "T9": 0.75,
+    "T10": 0.0
+  }
+}
