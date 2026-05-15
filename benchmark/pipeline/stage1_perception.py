@@ -383,29 +383,37 @@ def name_clusters(
     tracks: list[dict],
     utterances: list[Utterance],
     subtitle_text: str | None,
+    explicit_characters: list[str] | None = None,
 ) -> list[dict]:
     """Use GPT-5.5 to align face_cluster IDs to character names by cross-referencing dialogue.
 
-    Heuristic input: top-K speakers (by utterance count), addressed names mined from subtitles.
+    Args:
+        explicit_characters: If provided, use these names as the candidate pool
+            (skip subtitle mining). Useful when the user knows the cast in advance.
     """
     if not tracks:
         return tracks
-    # Mine candidate names from subtitle (capitalized tokens / "X!", "Hey X")
-    import re
+    # Source candidate names: explicit list, else mine from subtitle
+    if explicit_characters:
+        top_names = list(explicit_characters)
+    else:
+        import re
+        from collections import Counter
 
-    names: list[str] = []
-    if subtitle_text:
-        cands = re.findall(r"\b([A-Z][a-z]{2,})\b", subtitle_text)
-        # filter common English non-name tokens
-        stop = {"The", "And", "Yeah", "Okay", "Well", "Now", "Hey", "What", "Why", "How", "Where", "When", "This", "That", "Mom", "Dad"}
-        for n in cands:
-            if n not in stop:
-                names.append(n)
-    from collections import Counter
-
-    top_names = [n for n, _ in Counter(names).most_common(10)]
+        names: list[str] = []
+        if subtitle_text:
+            cands = re.findall(r"\b([A-Z][a-z]{2,})\b", subtitle_text)
+            stop = {
+                "The", "And", "Yeah", "Okay", "Well", "Now", "Hey", "What", "Why", "How",
+                "Where", "When", "This", "That", "Mom", "Dad", "Father", "Mother", "Sir",
+                "Madam", "Mister", "Mrs", "Miss", "Doctor", "Lord", "Lady",
+            }
+            for n in cands:
+                if n not in stop:
+                    names.append(n)
+        top_names = [n for n, _ in Counter(names).most_common(10)]
     if not top_names:
-        LOG.warning("No candidate names mined from subtitle; clusters remain unnamed.")
+        LOG.warning("No candidate names available; clusters remain unnamed.")
         return tracks
 
     msgs = [
@@ -479,7 +487,14 @@ def assemble_shot_rows(
 # -----------------------------------------------------------------------------
 # Main entry
 # -----------------------------------------------------------------------------
-def run(video_path: Path, series: str, episode: str, srt: Path | None = None, do_visual: bool = False) -> None:
+def run(
+    video_path: Path,
+    series: str,
+    episode: str,
+    srt: Path | None = None,
+    do_visual: bool = False,
+    explicit_characters: list[str] | None = None,
+) -> None:
     """End-to-end Stage 1.
 
     Args:
@@ -488,6 +503,9 @@ def run(video_path: Path, series: str, episode: str, srt: Path | None = None, do
         episode: e.g. 'ep01'
         srt: optional subtitle file
         do_visual: also call GPT-5.5 for per-shot visual caption (slow; off by default)
+        explicit_characters: optional canonical character names. Useful when no
+            subtitle is available but the cast is known (e.g. 'Walter', 'Skyler',
+            'Jesse', 'Hank' for Breaking Bad). Skips name-mining heuristics.
     """
     out_dir = ensure_dir(Path(CFG["project"]["data_root"]) / "perception" / series)
     perception_path = out_dir / f"{episode}.jsonl"
@@ -522,7 +540,7 @@ def run(video_path: Path, series: str, episode: str, srt: Path | None = None, do
         sub_text = srt.read_text(encoding="utf-8", errors="replace")
     else:
         sub_text = "\n".join(u.text for u in utts)
-    name_clusters(face["tracks"], utts, sub_text)
+    name_clusters(face["tracks"], utts, sub_text, explicit_characters=explicit_characters)
 
     # 6) Assemble shot rows
     rows = assemble_shot_rows(shots, utts, face["tracks"], fps)
@@ -552,8 +570,11 @@ def main() -> None:
     ap.add_argument("--episode", required=True)
     ap.add_argument("--srt", type=Path, default=None)
     ap.add_argument("--do_visual", action="store_true")
+    ap.add_argument("--characters", nargs="+", default=None,
+                    help="Optional canonical character names (e.g. --characters Walter Skyler Jesse Hank). "
+                         "When provided, skip subtitle name mining.")
     args = ap.parse_args()
-    run(args.video, args.series, args.episode, args.srt, args.do_visual)
+    run(args.video, args.series, args.episode, args.srt, args.do_visual, args.characters)
 
 
 if __name__ == "__main__":
