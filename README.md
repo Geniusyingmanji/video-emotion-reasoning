@@ -5,7 +5,52 @@ long-form TV content. Targets the "M1-M7 memory components × E0/E1/E2/E3 settin
 matrix described in `emotion_video_bench.md`.
 
 See `survey.md` for the literature positioning and `emotion_video_bench.md` for the
-design plan.
+design plan. See `SESSION_REPORT.md` for the latest end-to-end smoke-test
+results.
+
+## Quick start — 30 seconds to a working demo
+
+```bash
+conda activate emotion
+cd /home/azureuser/workspace-gzy/zyf/video-emotion-reasoning
+
+make test          # 4/4 smoke tests (parse_json_block, LLM proxy, Qwen-Omni files, paths)
+make synth         # build a synthetic Breaking Bad scene perception (instant)
+make synth-pipeline  # Stage 2 → 6: events, M2 DAG, trajectory, M3/M5/M6/M7, QA, filters (~10 min, all LLM-bound)
+make synth-eval    # Stage 7: evaluate on 4 settings E0/E1/E2/E3 with GPT-5.5 (~5 min)
+make report        # cross-setting comparison table
+make status        # what's been done across all series
+```
+
+Expected result on synthetic_demo: 6 surviving QAs after filters, E0 ~80% → E1 100%
+(+~20pp local→episode gain) demonstrating the long-context-helps signal the
+benchmark is designed to measure.
+
+## Running on a real Breaking Bad episode
+
+```bash
+# 1. Drop episode mp4 (legitimately obtained — DVD/Blu-ray rip or paid digital
+#    download) under data/raw/breaking_bad/s01/. Subtitles optional.
+make stage1 VIDEO=data/raw/breaking_bad/s01/ep01.mp4 \
+    SERIES=breaking_bad EPISODE=ep01 \
+    CHARS='Walter Skyler Jesse Hank Marie' \
+    SRT=data/raw/breaking_bad/s01/ep01.srt   # SRT optional but improves naming
+
+# 2. Per-episode Stages 2-4
+python -m benchmark.pipeline.run_pipeline single \
+    --video data/raw/breaking_bad/s01/ep01.mp4 \
+    --series breaking_bad --episode ep01
+
+# 3. After 10 episodes have Stages 1-4 done:
+make season SERIES=breaking_bad EPISODES='ep01 ep02 ep03 ep04 ep05 ep06 ep07 ep08 ep09 ep10'
+
+# 4. Evaluate
+python -m benchmark.pipeline.stage7_eval --series breaking_bad --episode ep01 --setting E0
+python -m benchmark.pipeline.stage7_eval --series breaking_bad --episode ep01 --setting E1
+python -m benchmark.pipeline.stage7_eval --series breaking_bad --episode ep01 --setting E2
+python -m benchmark.pipeline.stage7_eval --series breaking_bad --episode ep01 --setting E3
+make report SERIES=breaking_bad
+```
 
 ## Setup
 
