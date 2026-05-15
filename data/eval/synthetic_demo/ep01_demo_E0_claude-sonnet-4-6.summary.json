@@ -3,15 +3,10 @@
   "episode": "ep01_demo",
   "setting": "E0",
   "model": "claude-sonnet-4-6",
-  "n_questions": 19,
-  "overall_accuracy": 0.15789473684210525,
+  "n_questions": 5,
+  "overall_accuracy": 0.6,
   "per_task_accuracy": {
-    "T1": 0.25,
-    "T2": 0.25,
-    "T4": 0.0,
-    "T6": 0.0,
-    "T7": 0.25,
-    "T9": 0.0,
-    "T10": 0.0
+    "T1": 0.6666666666666666,
+    "T7": 0.5
   }
 }

@@ -80,13 +80,26 @@ def extract_events_passA(perception_rows: list[dict], meta: dict, episode: str) 
     except Exception as e:  # noqa: BLE001
         LOG.warning(f"Pass-A JSON parse failed: {e}; raw[:300]={raw[:300]!r}")
         events = []
-    # Re-id and tag pass
+    # Re-id and remap trigger_ref values (LLM uses its own ID scheme — we standardize)
+    id_map: dict[str, str] = {}
     out: list[dict] = []
     for i, ev in enumerate(events):
-        ev["event_id"] = f"{episode}_ev{i:03d}A"
+        old_id = ev.get("event_id")
+        new_id = f"{episode}_ev{i:03d}A"
+        if old_id:
+            id_map[old_id] = new_id
+        ev["event_id"] = new_id
         ev["source"] = "passA_gpt55"
         out.append(ev)
-    LOG.info(f"Pass A: {len(out)} events from GPT-5.5")
+    # Now rewrite any trigger_ref using id_map; drop if it doesn't resolve
+    for ev in out:
+        trig = ev.get("trigger_ref")
+        if trig and trig in id_map:
+            ev["trigger_ref"] = id_map[trig]
+        elif trig:
+            # trigger_ref points to an ID we don't recognize — drop it
+            ev["trigger_ref"] = None
+    LOG.info(f"Pass A: {len(out)} events from GPT-5.5; {sum(1 for e in out if e.get('trigger_ref'))} with valid trigger_ref")
     return out
 
 
