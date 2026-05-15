@@ -1,0 +1,41 @@
+# 中间产物：5 个 sub-agent 的原始调研报告，已被 survey.md 吸收
+.survey-drafts/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# 数据 / 模型 / 缓存（pipeline 跑起来后会用到）
+data/raw/
+data/perception/
+data/events/
+data/event_graph/
+data/trajectory/
+data/season/
+data/qa/
+data/final/
+*.mp4
+*.mkv
+*.wav
+*.mp3
+*.srt
+models/
+checkpoints/
+*.ckpt
+*.pt
+*.safetensors
+
+# Secrets
+.env
+*.key
+credentials.json
