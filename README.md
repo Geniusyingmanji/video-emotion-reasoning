@@ -19,6 +19,7 @@ make synth         # build a synthetic Breaking Bad scene perception (instant)
 make synth-pipeline  # Stage 2 → 6: events, M2 DAG, trajectory, M3/M5/M6/M7, QA, filters (~10 min, all LLM-bound)
 make synth-eval    # Stage 7: evaluate on 4 settings E0/E1/E2/E3 with GPT-5.5 (~5 min)
 make report        # cross-setting comparison table
+make preview-qa    # show the surviving QAs in human-readable form
 make status        # what's been done across all series
 ```
 
