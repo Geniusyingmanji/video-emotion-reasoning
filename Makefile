@@ -37,6 +37,10 @@ synth-eval:
 	$(PY) -m benchmark.pipeline.stage7_eval --series $(SERIES) --episode $(EPISODE) --setting E2
 	$(PY) -m benchmark.pipeline.stage7_eval --series $(SERIES) --episode $(EPISODE) --setting E3
 
+synth-eval-qwen:
+	$(PY) -m benchmark.pipeline.stage7_eval_qwen_omni --series $(SERIES) --episode $(EPISODE) --setting E0
+	$(PY) -m benchmark.pipeline.stage7_eval_qwen_omni --series $(SERIES) --episode $(EPISODE) --setting E1
+
 stage1:
 	@[ -n "$(VIDEO)" ] || (echo "Usage: make stage1 VIDEO=/path/X.mp4 SERIES=Y EPISODE=Z"; exit 1)
 	$(PY) -m benchmark.pipeline.stage1_perception --video $(VIDEO) --series $(SERIES) --episode $(EPISODE)
