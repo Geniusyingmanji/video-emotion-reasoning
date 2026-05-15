@@ -12,6 +12,9 @@ help:
 	@echo "  synth-eval     Stage 7 evaluation for all E0/E1/E2/E3 on synthetic"
 	@echo "  stage1 VIDEO=/path/to/X.mp4 SERIES=Y EPISODE=Z  Run Stage 1 on a video"
 	@echo "  season SERIES=Y EPISODES='ep01 ep02 ...'  Run Stages 4.5 -> 6 for a season"
+	@echo "  report SERIES=Y  Cross-setting E0-E3 accuracy comparison table"
+	@echo "  status [SERIES=Y]  Per-series stage state and recommended next action"
+	@echo "  preview-qa SERIES=Y  Human-readable view of surviving QAs"
 	@echo "  clean-synth    Remove synthetic_demo outputs (keeps raw videos and models)"
 
 test:
@@ -46,6 +49,9 @@ report:
 
 status:
 	$(PY) -m benchmark.scripts.status
+
+preview-qa:
+	$(PY) -m benchmark.scripts.preview_qa --series $(SERIES) --limit 30
 
 stage1:
 	@[ -n "$(VIDEO)" ] || (echo "Usage: make stage1 VIDEO=/path/X.mp4 SERIES=Y EPISODE=Z [CHARS='Walter Skyler']"; exit 1)
