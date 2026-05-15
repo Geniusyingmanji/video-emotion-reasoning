@@ -48,8 +48,10 @@ status:
 	$(PY) -m benchmark.scripts.status
 
 stage1:
-	@[ -n "$(VIDEO)" ] || (echo "Usage: make stage1 VIDEO=/path/X.mp4 SERIES=Y EPISODE=Z"; exit 1)
-	$(PY) -m benchmark.pipeline.stage1_perception --video $(VIDEO) --series $(SERIES) --episode $(EPISODE)
+	@[ -n "$(VIDEO)" ] || (echo "Usage: make stage1 VIDEO=/path/X.mp4 SERIES=Y EPISODE=Z [CHARS='Walter Skyler']"; exit 1)
+	$(PY) -m benchmark.pipeline.stage1_perception \
+	    --video $(VIDEO) --series $(SERIES) --episode $(EPISODE) \
+	    $(if $(CHARS),--characters $(CHARS),) $(if $(SRT),--srt $(SRT),)
 
 season:
 	@[ -n "$(EPISODES)" ] || (echo "Usage: make season SERIES=Y EPISODES='ep01 ep02 ...'"; exit 1)
