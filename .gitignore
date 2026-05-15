@@ -43,3 +43,6 @@ credentials.json
 # Logs
 logs/
 *.log
+
+# Claude runtime
+.claude/
