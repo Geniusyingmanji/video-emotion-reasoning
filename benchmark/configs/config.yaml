@@ -42,7 +42,7 @@ perception:
     det_size: [640, 640]
     min_face_size: 30
     cluster_eps: 0.35         # cosine distance threshold for AgglomerativeClustering
-    min_cluster_size: 3
+    min_cluster_size: 2       # dev-friendly; bump to 3-5 for full-episode runs
 
 events:
   types: [affect_event, action_event, social_event]

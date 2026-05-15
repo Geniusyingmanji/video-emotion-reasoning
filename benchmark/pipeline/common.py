@@ -86,16 +86,59 @@ def llm_chat(
 
 
 def parse_json_block(text: str) -> Any:
-    """Parse a JSON object/array from text, tolerating ```json fences and surrounding chatter."""
+    """Parse JSON from text, tolerating fences, surrounding chatter, and trailing garbage.
+
+    Strategy:
+      1. Strip ```json fences.
+      2. Try whole text.
+      3. If that fails, find first '[' or '{' and walk forward using a bracket counter
+         to find the matching closing bracket, ignoring brackets inside strings.
+    """
     text = text.strip()
     if text.startswith("```"):
-        # strip ``` or ```json fences
         text = text.split("```", 2)[1]
         if text.startswith("json"):
             text = text[4:]
         text = text.rsplit("```", 1)[0]
     text = text.strip()
-    return json.loads(text)
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    # Find first { or [ and walk forward
+    starts = [i for i, c in enumerate(text) if c in "[{"]
+    if not starts:
+        raise json.JSONDecodeError("No JSON object/array found", text, 0)
+    for start in starts:
+        opener = text[start]
+        closer = "]" if opener == "[" else "}"
+        depth = 0
+        in_string = False
+        escape = False
+        for i in range(start, len(text)):
+            ch = text[i]
+            if escape:
+                escape = False
+                continue
+            if ch == "\\":
+                escape = True
+                continue
+            if ch == '"':
+                in_string = not in_string
+                continue
+            if in_string:
+                continue
+            if ch == opener:
+                depth += 1
+            elif ch == closer:
+                depth -= 1
+                if depth == 0:
+                    try:
+                        return json.loads(text[start : i + 1])
+                    except json.JSONDecodeError:
+                        break  # try next starting position
+    raise json.JSONDecodeError("No parseable JSON segment", text, 0)
 
 
 @dataclass

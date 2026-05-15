@@ -137,110 +137,19 @@ def _load_qwen_omni():
     return _QWEN
 
 
-def qwen_omni_asr_paralanguage(audio_path: Path, window_sec: float = 30.0) -> list[Utterance]:
-    """Run Qwen2.5-Omni in chunks: ASR transcript + paralinguistic tags per utterance.
-
-    For long audio we chunk by `window_sec` and let Qwen-Omni return JSON with relative
-    timestamps; we then shift by the chunk offset.
-    """
-    import torch
-    import librosa
-    from qwen_omni_utils import process_mm_info
-
-    model, processor = _load_qwen_omni()
-    audio, sr = librosa.load(str(audio_path), sr=16000, mono=True)
-    total_sec = len(audio) / sr
-    LOG.info(f"ASR over {total_sec:.1f}s audio in {window_sec}s chunks")
-
-    utterances: list[Utterance] = []
-    win_samples = int(window_sec * sr)
-    n_chunks = (len(audio) + win_samples - 1) // win_samples
-
-    prompt = (
-        "Transcribe this audio. For each utterance, return JSON with fields:\n"
-        "  start: float seconds (relative to this clip)\n"
-        "  end:   float seconds (relative to this clip)\n"
-        "  text:  spoken words\n"
-        "  paralinguistic: list of tags chosen from "
-        "[tone:trembling, tone:flat, tone:agitated, tone:sarcastic, tone:whispered, "
-        " tempo:rushed, tempo:slow, pause:long, pause:short, "
-        " nonverbal:sigh, nonverbal:laugh, nonverbal:cry, nonverbal:cough, "
-        " volume:loud, volume:soft]\n"
-        "Return strict JSON array. No prose."
-    )
-
-    sys_prompt = (
-        "You are Qwen, a virtual human developed by the Qwen Team, Alibaba Group, "
-        "capable of perceiving auditory and visual inputs, as well as generating text and speech."
-    )
-
-    for ci in tqdm(range(n_chunks), desc="qwen-omni ASR"):
-        chunk = audio[ci * win_samples : (ci + 1) * win_samples]
-        if len(chunk) < sr * 0.5:  # too short
-            continue
-        offset = ci * window_sec
-        # Both system and user content must be list-of-dict for Qwen2.5-Omni processor.
-        conv = [
-            {"role": "system", "content": [{"type": "text", "text": sys_prompt}]},
-            {
-                "role": "user",
-                "content": [
-                    {"type": "audio", "audio": chunk},
-                    {"type": "text", "text": prompt},
-                ],
-            },
-        ]
-        audios, images, videos = process_mm_info(conv, use_audio_in_video=False)
-        text = processor.apply_chat_template(conv, add_generation_prompt=True, tokenize=False)
-        inputs = processor(
-            text=text,
-            audio=audios,
-            images=images,
-            videos=videos,
-            return_tensors="pt",
-            padding=True,
-        ).to(model.device)
-        with torch.no_grad():
-            out = model.generate(**inputs, max_new_tokens=1024, do_sample=False)
-        gen = processor.batch_decode(out[:, inputs.input_ids.shape[1]:], skip_special_tokens=True)[0]
-        # Parse JSON robustly
-        try:
-            from benchmark.pipeline.common import parse_json_block
-            rows = parse_json_block(gen)
-            if not isinstance(rows, list):
-                rows = []
-        except Exception as e:  # noqa: BLE001
-            LOG.warning(f"chunk {ci} JSON parse failed: {e}; raw={gen[:200]!r}")
-            rows = []
-        for j, r in enumerate(rows):
-            try:
-                utt = Utterance(
-                    utt_id=f"utt_{ci:04d}_{j:03d}",
-                    start_sec=float(r["start"]) + offset,
-                    end_sec=float(r["end"]) + offset,
-                    speaker_id=None,
-                    text=r.get("text", ""),
-                    paralinguistic=list(r.get("paralinguistic", [])),
-                )
-                utterances.append(utt)
-            except Exception as e:  # noqa: BLE001
-                LOG.warning(f"row {j} skipped: {e}; row={r}")
-    LOG.info(f"Got {len(utterances)} utterances from Qwen-Omni")
-    return utterances
-
-
 def faster_whisper_asr(audio_path: Path) -> list[Utterance]:
-    """ASR fallback when Qwen-Omni fails — no paralinguistic tags."""
+    """Primary ASR: faster-whisper large-v3. Reliable timestamps + text.
+    Paralanguage tags are added in a second pass via qwen_omni_paralanguage()."""
     from faster_whisper import WhisperModel
 
-    LOG.info("Falling back to faster-whisper large-v3")
+    LOG.info("ASR via faster-whisper large-v3")
     model = WhisperModel("large-v3", device="cuda", compute_type="float16")
     segments, _ = model.transcribe(str(audio_path), beam_size=5, vad_filter=True)
     utts: list[Utterance] = []
     for i, s in enumerate(segments):
         utts.append(
             Utterance(
-                utt_id=f"utt_w_{i:04d}",
+                utt_id=f"utt_{i:04d}",
                 start_sec=float(s.start),
                 end_sec=float(s.end),
                 speaker_id=None,
@@ -250,6 +159,78 @@ def faster_whisper_asr(audio_path: Path) -> list[Utterance]:
         )
     LOG.info(f"Got {len(utts)} utterances from faster-whisper")
     return utts
+
+
+def qwen_omni_paralanguage(audio_path: Path, utts: list[Utterance], pad_sec: float = 0.3) -> None:
+    """Annotate paralinguistic tags on already-transcribed utterances.
+
+    For each utterance we slice the audio and ask Qwen-Omni a constrained yes/no-ish
+    classification ('does this utterance have any of these tags? return list').
+    This is a much more reliable task for Qwen-Omni than open-ended JSON ASR.
+    """
+    import librosa
+    import torch
+    from qwen_omni_utils import process_mm_info
+
+    if not utts:
+        return
+    model, processor = _load_qwen_omni()
+    audio, sr = librosa.load(str(audio_path), sr=16000, mono=True)
+
+    sys_prompt = (
+        "You are Qwen, a virtual human developed by the Qwen Team, Alibaba Group, "
+        "capable of perceiving auditory and visual inputs, as well as generating text and speech."
+    )
+    tag_pool = [
+        "tone:trembling", "tone:flat", "tone:agitated", "tone:sarcastic", "tone:whispered",
+        "tempo:rushed", "tempo:slow", "pause:long", "pause:short",
+        "nonverbal:sigh", "nonverbal:laugh", "nonverbal:cry", "nonverbal:cough",
+        "volume:loud", "volume:soft",
+    ]
+    prompt_template = (
+        "Listen to this short audio of a single spoken line: '{text}'. "
+        "Which of the following paralinguistic tags apply to HOW it is spoken? "
+        f"Choose any subset of: {tag_pool}. "
+        "Return ONLY a JSON array of tags (or [] if none clearly apply). "
+        "Do not output any prose."
+    )
+
+    for u in tqdm(utts, desc="qwen-omni paralanguage"):
+        start = max(0.0, u.start_sec - pad_sec)
+        end = min(len(audio) / sr, u.end_sec + pad_sec)
+        chunk = audio[int(start * sr) : int(end * sr)]
+        if len(chunk) < sr * 0.2:
+            continue
+        prompt = prompt_template.format(text=u.text[:120])
+        conv = [
+            {"role": "system", "content": [{"type": "text", "text": sys_prompt}]},
+            {"role": "user", "content": [
+                {"type": "audio", "audio": chunk},
+                {"type": "text", "text": prompt},
+            ]},
+        ]
+        audios, images, videos = process_mm_info(conv, use_audio_in_video=False)
+        text = processor.apply_chat_template(conv, add_generation_prompt=True, tokenize=False)
+        inputs = processor(
+            text=text, audio=audios, images=images, videos=videos,
+            return_tensors="pt", padding=True,
+        ).to(model.device)
+        with torch.no_grad():
+            out = model.generate(
+                **inputs,
+                max_new_tokens=128,
+                do_sample=False,
+                repetition_penalty=1.2,
+            )
+        gen = processor.batch_decode(out[:, inputs.input_ids.shape[1]:], skip_special_tokens=True)[0]
+        try:
+            from benchmark.pipeline.common import parse_json_block
+            tags = parse_json_block(gen)
+            if not isinstance(tags, list):
+                tags = []
+            u.paralinguistic = [t for t in tags if isinstance(t, str) and t in tag_pool]
+        except Exception:  # noqa: BLE001
+            u.paralinguistic = []
 
 
 # -----------------------------------------------------------------------------
@@ -515,18 +496,18 @@ def run(video_path: Path, series: str, episode: str, srt: Path | None = None, do
     # 1) Shot detection
     shots, fps = detect_shots(video_path)
 
-    # 2) Audio + ASR + paralanguage
+    # 2) Audio extraction
     audio_path = ensure_dir(out_dir / "audio") / f"{episode}.wav"
     if not audio_path.exists():
         LOG.info(f"Extracting audio → {audio_path}")
         extract_audio(video_path, audio_path)
+    # 2a) ASR via faster-whisper (reliable timestamps + text)
+    utts = faster_whisper_asr(audio_path)
+    # 2b) Paralanguage tagging via Qwen2.5-Omni on already-segmented utterances
     try:
-        utts = qwen_omni_asr_paralanguage(audio_path)
-        if len(utts) == 0:
-            raise RuntimeError("qwen-omni returned 0 utterances; falling back")
+        qwen_omni_paralanguage(audio_path, utts)
     except Exception as e:  # noqa: BLE001
-        LOG.warning(f"Qwen-Omni ASR failed: {e}; falling back to faster-whisper")
-        utts = faster_whisper_asr(audio_path)
+        LOG.warning(f"paralanguage tagging failed: {e}; utterances kept without tags")
 
     # 3) Diarization
     diar = diarize(audio_path)
