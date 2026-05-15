@@ -1,0 +1,79 @@
+# Project-wide configuration. All Stage scripts load this.
+
+project:
+  name: emotion-long-video-reasoning
+  data_root: /home/azureuser/workspace-gzy/zyf/video-emotion-reasoning/data
+  models_root: /home/azureuser/workspace-gzy/zyf/models
+  logs_root:   /home/azureuser/workspace-gzy/zyf/video-emotion-reasoning/logs
+
+llm:
+  # Local LiteLLM proxy mapping Azure GPT-5.5 → various names. See ~/litellm_config.yaml.
+  base_url: http://localhost:4000/v1
+  api_key: dummy            # AAD token handled by litellm proxy upstream
+  primary_model: claude-sonnet-4-6     # → azure/gpt-5.5
+  fallback_model: claude-haiku-4-5      # → azure/gpt-5.5 (same backend, kept for future split)
+  max_tokens: 4096
+  temperature: 0.2
+  reasoning_effort: medium
+
+mllm:
+  qwen_omni:
+    path: /home/azureuser/workspace-gzy/zyf/models/Qwen2.5-Omni-7B
+    # Load only the Thinker side to avoid torch.load (CVE-2025-32434) which requires torch>=2.6.
+    use_thinker_only: true
+    dtype: bfloat16
+    device: cuda:0
+
+perception:
+  shot_detector:
+    threshold: 27.0           # ContentDetector default; lower = more cuts
+    min_scene_len_frames: 15
+  video_caption:
+    fps_sample: 0.5
+    burst_frames_per_shot: 3   # extra frames around shot middle for micro-expression
+  asr:
+    primary: qwen_omni        # paralanguage-aware
+    fallback: faster_whisper  # if qwen-omni fails on a clip
+  diarization:
+    use_pyannote: true
+    hf_token_env: HF_TOKEN    # user supplies; pyannote model is gated
+  face:
+    backbone: insightface     # RetinaFace + ArcFace
+    det_size: [640, 640]
+    min_face_size: 30
+    cluster_eps: 0.35         # cosine distance threshold for AgglomerativeClustering
+    min_cluster_size: 3
+
+events:
+  types: [affect_event, action_event, social_event]
+  iou_merge_threshold: 0.4
+  intensity_scale: [0.0, 1.0]
+
+graph:
+  edge_types: [temporal_after, causal, emotion_trigger, counter_action, reveals_belief, reveals_intention, predicts_action]
+  enforce_dag: true
+  enforce_temporal_monotonic: true
+
+tasks:
+  # 9-task family with target QA share (will be normalized).
+  weights:
+    T1: 0.15  # emotion recognition
+    T2: 0.12  # multimodal evidence
+    T4: 0.08  # emotion shift localization
+    T5: 0.12  # single-hop emotion cause
+    T6: 0.10  # multi-hop causal chain
+    T7: 0.13  # short-term action prediction
+    T8: 0.12  # cross-episode action prediction
+    T9: 0.10  # OCEAN personality consistency
+    T10: 0.08 # emotion contagion
+
+horizons:
+  T7: [1min, 5min]
+  T8: [30min, cross_episode]
+
+filters:
+  F0_shortcut_threshold: 0.30   # if single-frame / text-only / world-knowledge ≥ 0.30 → drop
+  F1_no_context_threshold: 0.35
+  F3_modal_ablation_threshold: 0.80
+  F4_consensus_threshold: 0.66
+  F8_mcq_vs_freeform_gap: 0.30  # if MCQ acc - free-form acc > 0.30 → flag batch

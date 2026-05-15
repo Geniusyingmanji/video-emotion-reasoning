@@ -1,0 +1,46 @@
+# Locked versions for the emotion conda env (Python 3.11.15)
+# Created 2026-05-15 after verifying Qwen2.5-Omni-7B loads successfully.
+
+# Core ML stack
+torch==2.5.1+cu121
+torchaudio==2.5.1+cu121
+torchvision==0.20.1+cu121
+--extra-index-url https://download.pytorch.org/whl/cu121
+
+# Critical: transformers 4.52.4 is the version where Qwen2.5-Omni was upstreamed.
+# Earlier versions lack Qwen2_5OmniForConditionalGeneration; later (5.x) breaks torch 2.5 custom_ops.
+transformers==4.52.4
+accelerate
+sentencepiece
+einops
+huggingface_hub
+
+# Qwen helpers (official utility packages)
+qwen-omni-utils
+qwen-vl-utils
+
+# Perception toolchain (Stage 1)
+scenedetect[opencv]            # shot boundary detection
+pyannote-audio                  # speaker diarization (needs HF gated model accept)
+insightface                     # RetinaFace detection + ArcFace embedding
+onnxruntime-gpu                 # insightface backend
+librosa
+soundfile
+ffmpeg-python
+opencv-python
+faster-whisper                  # ASR fallback (we prefer Qwen-Omni for paralanguage)
+
+# LLM clients
+openai                          # used against local LiteLLM proxy at :4000 (Azure GPT-5.5)
+litellm                         # for any direct litellm calls
+
+# Pipeline tooling
+pydantic
+tqdm
+pyyaml
+jsonlines
+pandas
+numpy
+
+# Video acquisition (dev only — for legitimate YouTube clips)
+yt-dlp

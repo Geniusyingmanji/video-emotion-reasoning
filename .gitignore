@@ -39,3 +39,7 @@ checkpoints/
 .env
 *.key
 credentials.json
+
+# Logs
+logs/
+*.log
