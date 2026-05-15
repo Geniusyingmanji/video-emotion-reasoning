@@ -188,7 +188,7 @@ def evaluate_one(qa: dict, setting: str, ep_data: dict, season_data: dict, model
                 {"role": "user", "content": user},
             ],
             model=model,
-            max_tokens=64,  # GPT-5.5 uses reasoning tokens; <20 returns empty content
+            max_tokens=512,  # GPT-5.5 reasoning can consume 300+ tokens before content
             temperature=0.0,
         )
         # The model often outputs whitespace + letter (or reasoning + letter); pick first A/B/C/D

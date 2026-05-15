@@ -43,7 +43,11 @@ LOG = get_logger("stage6")
 
 
 def _llm_answer(question: str, options: dict[str, str], context: str | None = None) -> str | None:
-    """Ask the LLM to answer (A/B/C/D) given Q and options, optional context. Returns letter."""
+    """Ask the LLM to answer (A/B/C/D) given Q and options, optional context. Returns letter.
+
+    GPT-5.5 routes through reasoning; complex questions can consume 300-500 reasoning
+    tokens before content appears. We budget 512 to be safe.
+    """
     sys_prompt = "Choose the best option. Output ONLY a single letter A B C or D, nothing else."
     parts: list[str] = []
     if context:
@@ -57,7 +61,7 @@ def _llm_answer(question: str, options: dict[str, str], context: str | None = No
             {"role": "system", "content": sys_prompt},
             {"role": "user", "content": "\n".join(parts)},
         ],
-        max_tokens=64,  # GPT-5.5 reasoning overhead; <20 returns empty content
+        max_tokens=512,
         temperature=0.0,
     )
     cand = (raw or "").upper()
