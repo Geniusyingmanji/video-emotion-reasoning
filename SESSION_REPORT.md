@@ -121,14 +121,18 @@ generic, D fits Walter's persona not Jesse's.
 
 ## Repo
 
-5 commits pushed to `https://github.com/Geniusyingmanji/video-emotion-reasoning`:
+14 commits pushed to `https://github.com/Geniusyingmanji/video-emotion-reasoning`. Highlights:
 
-1. `e0fd472` Initial commit: plan + survey
-2. `a84927d` Stage 1 + scaffolding (config, common utils)
-3. `586f952` Stages 2-6 + 9 task prompts + driver + README
-4. `4dbb2da` smoke tests
-5. `3ebd2a4` Ignore .claude/ runtime
-6. `1e39b69` End-to-end smoke test on synthetic data
+- `a84927d` Stage 1 + scaffolding
+- `586f952` Stages 2-6 + 9 task prompts + driver + README
+- `1e39b69` End-to-end smoke test pass (synthetic Breaking Bad)
+- `9ed9f0d` SESSION_REPORT + real ToS Stage 2 validation
+- `e006b26` Stage 7 evaluation panel + first E0/E1/E2/E3 numbers
+- `2b8c902` max_tokens fix (64→512 for GPT-5.5 reasoning)
+- `f0861fd` Stage 2 trigger_ref remap bug fix → T5 now works
+- `5c3b8b2` Stage 1 --characters flag
+- `8d24e08` Stage 7 Qwen-Omni evaluator (audio-aware E0)
+- `b6bfcf9` eval report generator
 
 ## What's next (when you wake up)
 
@@ -199,13 +203,23 @@ Smoke test reproduction:
 ```
 conda activate emotion
 cd /home/azureuser/workspace-gzy/zyf/video-emotion-reasoning
-python -m benchmark.tests.test_pipeline_smoke           # 4/4 PASS
-python -m benchmark.scripts.make_synthetic_perception   # generate fixture
-python -m benchmark.pipeline.stage2_events --series synthetic_demo --episode ep01_demo --skip_passB
-python -m benchmark.pipeline.stage3_relations --series synthetic_demo --episode ep01_demo
-python -m benchmark.pipeline.stage4_trajectory --series synthetic_demo --episode ep01_demo
-python -m benchmark.pipeline.stage4_5_cross_episode --series synthetic_demo --episodes ep01_demo
-python -m benchmark.pipeline.stage4_6_semantic --series synthetic_demo --episodes ep01_demo
-python -m benchmark.pipeline.stage5_qgen --series synthetic_demo --episodes ep01_demo --tasks T1 T2 T9 T10
-python -m benchmark.pipeline.stage6_filters --series synthetic_demo --in_qa data/qa/synthetic_demo/qa_staging.jsonl
+make test           # 4/4 smoke tests PASS
+make synth-pipeline # Stage 2-6 on synthetic_demo (~10 min)
+make synth-eval     # Stage 7 E0-E3 with GPT-5.5 (~3 min)
+make synth-eval-qwen # Stage 7 E0/E1 with Qwen-Omni (~5 min)
+make report         # cross-model comparison table
+```
+
+For a real Breaking Bad episode (when user provides one):
+```
+make stage1 VIDEO=data/raw/breaking_bad/s01/ep01.mp4 \
+    SERIES=breaking_bad EPISODE=ep01
+# add --characters Walter Skyler Jesse Hank to stage1_perception.py args
+python -m benchmark.pipeline.run_pipeline single \
+    --video data/raw/breaking_bad/s01/ep01.mp4 \
+    --series breaking_bad --episode ep01
+# Stage 2-4 take ~3 min total
+# When all 10 episodes have Stages 1-4 done:
+make season SERIES=breaking_bad EPISODES='ep01 ep02 ... ep10'
+make report SERIES=breaking_bad
 ```
