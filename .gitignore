@@ -24,6 +24,10 @@ data/trajectory/
 data/season/
 data/qa/
 data/final/
+# Keep summary.json under data/eval/ as it's tiny and shows reproducibility,
+# but exclude full per-prediction jsonl which is per-experiment artifact.
+data/eval/*.jsonl
+!data/eval/*.summary.json
 *.mp4
 *.mkv
 *.wav

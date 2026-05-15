@@ -18,16 +18,30 @@ user-supplied files).
 
 ## What works end-to-end
 
-| Stage | Status on synthetic | Status on real video |
+| Stage | Status on synthetic | Status on real video (ToS 4min) |
 |---|---|---|
-| 1 perception | n/a (synthesized) | ✅ ToS 4min: 47 shots / 22 utts / 17 face clusters / paralanguage tags |
-| 2 events | ✅ 15 events (4 affect / 6 action / 5 social) | ⏳ run in progress |
-| 3 M2 DAG | ✅ 10 high-conf edges + DAG enforcement | — |
-| 4 M4 traj | ✅ 3 characters with waypoints | — |
+| 1 perception | n/a (synthesized) | ✅ 47 shots / 22 utts / 17 face clusters / paralanguage tags ("tone:trembling, volume:loud" on the actual frightened line) |
+| 2 events | ✅ 15 events (4 affect / 6 action / 5 social) | ✅ 11 events (2 affect / 3 action / 6 social); first event correctly tagged "fear" from paralanguage |
+| 3 M2 DAG | ✅ 10 high-conf edges | ✅ 4 high-conf edges (causal, emotion_trigger) |
+| 4 M4 traj | ✅ 3 characters | (no named chars on ToS — Stage 1c naming requires subtitle) |
 | 4.5 cross-ep M3 | ✅ trivial for 1 ep | — |
 | 4.6 M5/M6/M7 | ✅ Walter OCEAN matches canon, 22 propositional facts incl. ToM-knowledge | — |
-| 5 9-task QA | ✅ 19 QAs across T1/T2/T4/T6/T7/T9/T10 | — |
+| 5 9-task QA | ✅ 19 QAs across T1/T2/T4/T6/T7/T9/T10 | (skipped — needs M5/M6) |
 | 6 filters F0b/F0c/F5/F7 | ✅ 19/19 kept on small clean data | — |
+| **7 evaluation E0/E1/E2/E3** | ✅ first numbers: see below | — |
+
+### First Stage 7 eval (claude-sonnet-4-6 = Azure GPT-5.5) on synthetic_demo
+
+| Setting | Overall | T1 | T2 | T4 | T6 | T7 | T9 | T10 |
+|---|---|---|---|---|---|---|---|---|
+| E0 (local) | **15.8%** | 25% | 25% | 0% | 0% | 25% | 0% | 0% |
+| E1 (episode) | **47.4%** | **100%** | 25% | 0% | 0% | 25% | **75%** | 0% |
+| E2 (season) | 47.4% | (same — synthetic has only 1 episode) |
+| E3 (M5/M6/M7) | 47.4% | (same — both reduce to E1 here) |
+
+**Acc(E1) − Acc(E0) = +31.6pp** — the "long-context helps" signal the benchmark design needs is real. T1 going 25% → 100% from E0 to E1 (i.e., model fully needs the full-episode context to answer emotion-recognition correctly when the local clip is sparse).
+
+E2/E3 don't add to E1 here because the synthetic dataset has only 1 episode; with real 10-episode TV seasons, E2 should add cross-episode gain and E3 should add the M5/M6/M7 semantic-memory gain (these are exactly what we need to measure on the real data).
 
 Sample T9 (OCEAN consistency) QA generated automatically:
 
